@@ -1,0 +1,92 @@
+# JCLPARSE
+
+## Overview
+
+`jcl_parse.py` is a utility script for parsing Juniper Cloud Lab  output window. It maps device names to hostnames using a set of rules and generates configuration files for use with Ansible (`host_vars` YAML files) or SSH (`ssh_config`).
+
+This tool is useful for JCL environments where devices are dynamically assigned SSH ports and you need to automate the generation of inventory or SSH configuration for automation or access.
+
+---
+
+## Features
+
+- **Parse JCL output** to extract device SSH forwarding information.
+- **Map devices to hostnames** using a rule-based mapping file.
+- **Generate Ansible host_vars YAML files** for each mapped host.
+- **Generate or update an SSH config file** (`ssh_config`) with host entries.
+- **Update only relevant entries** in an existing `ssh_config` file.
+
+---
+
+## Usage
+
+### Command Line
+
+```sh
+python3 jcl_parse.py <jcl_file> <output_dir> [ini_file] [-ssh]
+```
+
+- `<jcl_file>`: Input file containing JCL output with port forwarding info.
+- `<output_dir>`: Directory where output files will be written.
+- `[ini_file]`: (Optional) Mapping rules file (default: `output2host.ini`).
+- `-ssh`: If specified, output will be written to a single `ssh_config` file instead of YAML files.
+
+### Examples
+
+#### Generate Ansible YAML files
+
+```sh
+python3 jcl_parse.py jcl_output.txt output_dir
+```
+
+This will create YAML files for each host in `output_dir/host_vars/`.
+
+#### Generate or update SSH config
+
+```sh
+python3 jcl_parse.py jcl_output.txt output_dir -ssh
+```
+
+This will create or update `output_dir/ssh_config` with the mapped hosts.
+
+---
+
+## Mapping Rules File (`output2host.ini`)
+
+This file defines how device names are mapped to hostnames. Each line should be:
+
+```
+<regex> <order> <hostname>
+```
+
+- `<regex>`: Regular expression to match device names.
+- `<order>`: The Nth match for this regex.
+- `<hostname>`: The hostname to assign.
+
+Example:
+
+```
+deviceA 1 host1
+deviceB 2 host2
+```
+
+---
+
+## Requirements
+
+- Python 3.7+
+- PyYAML (`pip install pyyaml`)
+
+---
+
+## Notes
+
+- Existing `ssh_config` entries are preserved unless a mapped host is updated.
+- Only the relevant SSH config entries are changed or added.
+- The script prints the mapping and output actions for transparency.
+
+---
+
+## License
+
+??? License
