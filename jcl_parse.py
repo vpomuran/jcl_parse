@@ -1,8 +1,10 @@
+#!/usr/bin/env python3
 import pprint
 import re
 import sys
 import os
 import yaml
+import argparse
 from typing import List, Dict, Tuple, Any
 
 def parse_jcl_output(filename: str) -> List[Dict[str, str]]:
@@ -100,18 +102,63 @@ def write_host_vars_yaml(hostname: str, info: Dict[str, str], out_dir: str = "ho
     with open(filepath, "w") as f:
         yaml.dump(data, f, default_flow_style=False)
 
+def write_ssh_config(mapped: Dict[str, Dict[str, str]], out_dir: str = ".") -> None:
+    import collections
+
+    os.makedirs(out_dir, exist_ok=True)
+    filepath = os.path.join(out_dir, "ssh_config")
+    existing_entries = collections.OrderedDict()
+
+    # Parse existing ssh_config if it exists
+    if os.path.exists(filepath):
+        with open(filepath, "r") as f:
+            lines = f.readlines()
+        current_host = None
+        current_block = []
+        for line in lines:
+            if line.strip().startswith("Host "):
+                if current_host is not None:
+                    existing_entries[current_host] = current_block
+                current_host = line.strip().split(maxsplit=1)[1]
+                current_block = [line]
+            elif current_host is not None:
+                current_block.append(line)
+        if current_host is not None:
+            existing_entries[current_host] = current_block
+
+    # Update or add entries for mapped hosts
+    for hostname, info in mapped.items():
+        entry = [
+            f"Host {hostname}\n",
+            f"    HostName {info['ssh_host']}\n",
+            f"    Port {info['ssh_port']}\n",
+            "\n"
+        ]
+        existing_entries[hostname] = entry
+
+    # Write all entries back
+    with open(filepath, "w") as f:
+        for block in existing_entries.values():
+            f.writelines(block)
+
 if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print(f"Usage: {sys.argv[0]} <jcl_output2.txt> <output_dir> [output2host.ini]")
-        sys.exit(1)
-    jcl_file: str = sys.argv[1]
-    output_dir: str = sys.argv[2]
-    ini_file: str = sys.argv[3] if len(sys.argv) > 3 else "output2host.ini"
-    devices = parse_jcl_output(jcl_file)
-    rules = parse_output2host_ini(ini_file)
+    parser = argparse.ArgumentParser(description="Parse JCL output and generate host vars or ssh_config.")
+    parser.add_argument("jcl_file", help="Input JCL output file")
+    parser.add_argument("output_dir", help="Output directory")
+    parser.add_argument("ini_file", nargs="?", default="output2host.ini", help="INI mapping file")
+    parser.add_argument("-ssh", action="store_true", help="Output to ssh_config instead of YAML files")
+    args = parser.parse_args()
+
+    devices = parse_jcl_output(args.jcl_file)
+    rules = parse_output2host_ini(args.ini_file)
     pprint.pprint(devices)
     mapped = map_devices_to_hostnames(devices, rules)
-    for hostname, info in mapped.items():
-        fname = os.path.join(output_dir,"host_vars",f"{hostname}.yml")
-        print(f"Writing {fname}: ssh_host={info['ssh_host']} ssh_port={info['ssh_port']}")
-        write_host_vars_yaml(hostname, info, os.path.join(output_dir, "host_vars"))
+
+    if args.ssh:
+        print(f"Writing ssh_config to {os.path.join(args.output_dir, 'ssh_config')}")
+        write_ssh_config(mapped, args.output_dir)
+    else:
+        for hostname, info in mapped.items():
+            fname = os.path.join(args.output_dir, "host_vars", f"{hostname}.yml")
+            print(f"Writing {fname}: ssh_host={info['ssh_host']} ssh_port={info['ssh_port']}")
+            write_host_vars_yaml(hostname, info, os.path.join(args.output_dir, "host_vars"))
