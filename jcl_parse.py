@@ -35,10 +35,27 @@ def parse_jcl_output(filename: str) -> List[Dict[str, str]]:
                         'ssh_host': ssh_host,
                         'ssh_port': ssh_port
                     })
+                    if current_device.startswith('IntGwy'): #we need to treat Internet Gateway in a special way
+                                                        # becasue additional parameter of Public IP is required
+                        devices[-1]['intgateway'] = True  
+                    else:
+                        devices[-1]['intgateway'] = False
                     current_device = None  # Reset current device after processing
                     second = False
                 else:    
                     second = True
+            elif current_device is None: # search for NAT address for IntGwy
+                intgwy_match = re.search(r'Concrete Resource Name: (\S+)$', line) 
+                if intgwy_match:
+                    intgw_device = intgwy_match.group(1)
+                    if intgw_device.startswith('IntGwy'):                        
+                        line=f.__next__().strip()  # Skip the next line  
+                        public_ip_match = re.search(r'Public Addresses: (\S+)$', line)
+                        if public_ip_match:
+                            public_ip = public_ip_match.group(1)
+                            intgw_index=next((i for i, d in enumerate(devices) if d['device_name'] == intgw_device), None)
+                            if intgw_index is not None:
+                                devices[intgw_index]['nat_address'] = public_ip                            
                     
     return devices
 
@@ -81,7 +98,8 @@ def map_devices_to_hostnames(
                         'ssh_port': device['ssh_port'],
                         'device_name': device['device_name']
                     }
-     #               break  
+                    if device['intgateway']:
+                        mapped[hostname]['nat_address'] = device['nat_address']
     return mapped
 
 def write_host_vars_yaml(hostname: str, info: Dict[str, str], out_dir: str = "host_vars") -> None:
@@ -99,6 +117,11 @@ def write_host_vars_yaml(hostname: str, info: Dict[str, str], out_dir: str = "ho
     # Update only the relevant variables
     data["ansible_ssh_host"] = info["ssh_host"]
     data["ansible_ssh_port"] = info["ssh_port"]
+    if 'nat_address' in info:
+        data["nat"] = {
+            "pool_address": info["nat_address"]
+        }
+
     with open(filepath, "w") as f:
         yaml.dump(data, f, default_flow_style=False)
 
