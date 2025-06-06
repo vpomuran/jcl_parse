@@ -118,9 +118,10 @@ def write_host_vars_yaml(hostname: str, info: Dict[str, str], out_dir: str = "ho
     data["ansible_ssh_host"] = info["ssh_host"]
     data["ansible_ssh_port"] = info["ssh_port"]
     if 'nat_address' in info:
-        data["nat"] = {
-            "pool_address": info["nat_address"]
-        }
+        dnat=data.get("nat", {})
+        dnat["pool_address"] = info["nat_address"]
+        data["nat"] = dnat
+    
 
     with open(filepath, "w") as f:
         yaml.dump(data, f, default_flow_style=False)
