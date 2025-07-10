@@ -24,10 +24,12 @@ def parse_jcl_output(filename: str) -> List[Dict[str, str]]:
             if device_match:
                 current_device = device_match.group(1)
                 continue
-
+            test_match = re.search(r'Concrete Resource Name: (\S+)$', line)
+            
             ssh_match = ssh_forward_pattern.match(line)
+    #        print(f"test_match={test_match} {line} ssh_match={ssh_match} current_device={current_device}")
             if ssh_match and current_device: 
-                if second: # second occurence of the same device
+                if second or current_device.startswith('vLinuxPC'): # second occurence of the same device
                     ssh_host = ssh_match.group(1)
                     ssh_port = ssh_match.group(2)
                     devices.append({
@@ -45,7 +47,8 @@ def parse_jcl_output(filename: str) -> List[Dict[str, str]]:
                 else:    
                     second = True
             elif current_device is None: # search for NAT address for IntGwy
-                intgwy_match = re.search(r'Concrete Resource Name: (\S+)$', line) 
+                intgwy_match = re.search(r'Concrete Resource Name: (\S+)$', line)
+            #    print(f"intgwy_match={intgwy_match} {line}") 
                 if intgwy_match:
                     intgw_device = intgwy_match.group(1)
                     if intgw_device.startswith('IntGwy'):                        
